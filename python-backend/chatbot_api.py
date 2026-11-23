@@ -1,6 +1,50 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
+import urllib.request
+from dotenv import load_dotenv
+
+# Load .env from python-backend or parent directory
+load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+
+def call_groq_chat(prompt):
+    """Call Groq API using available key and models"""
+    api_key = os.environ.get('GROQ_API') or os.environ.get('VITE_GROQ_API') or ''
+    models = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b']
+    
+    for model in models:
+        try:
+            req_data = json.dumps({
+                "model": model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are HealthBridge AI Assistant, an expert medical and healthcare chatbot. Answer health and symptom questions clearly and compassionately. If asked about nearby healthcare resources or hospitals, provide helpful recommendations and advise checking the HealthBridge Locate Hospital feature at /locate."
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.6,
+                "max_tokens": 1024
+            }).encode('utf-8')
+            
+            req = urllib.request.Request(
+                'https://api.groq.com/openai/v1/chat/completions',
+                data=req_data,
+                headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json'
+                }
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                content = result.get('choices', [{}])[0].get('message', {}).get('content')
+                if content:
+                    return content
+        except Exception as e:
+            print(f"Groq API error on model {model}: {e}")
+            continue
+    return None
 import base64
 import io
 import json
@@ -869,7 +913,13 @@ Feel free to ask any follow-up questions!"""
     return response
 
 def generate_ai_response(user_message, image_analysis=None):
-    """Generate intelligent medical response"""
+    """Generate intelligent medical response using Groq AI with rule-based fallback"""
+    # If no image analysis, prioritize Groq AI
+    if not (image_analysis and image_analysis.get('success')) and user_message and len(user_message.strip()) > 1:
+        groq_response = call_groq_chat(user_message)
+        if groq_response:
+            return groq_response
+
     message_lower = user_message.lower()
     
     # Handle image analysis

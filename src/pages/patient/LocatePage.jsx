@@ -31,7 +31,21 @@ import {
 import { getCampsByLocation } from '@/services/campServices';
 import { useAuth } from '@/contexts/AuthContext';
 import { registerForCamp, unregisterFromCamp } from '@/services/campServices';
+import { Link } from 'react-router-dom';
+import HospitalMapLeaflet from '@/components/map/HospitalMapLeaflet';
 import toast from 'react-hot-toast';
+
+const CITY_COORDINATES = {
+  pune: { lat: 18.5204, lng: 73.8567 },
+  mumbai: { lat: 19.0760, lng: 72.8777 },
+  delhi: { lat: 28.6139, lng: 77.2090 },
+  bangalore: { lat: 12.9716, lng: 77.5946 },
+  chennai: { lat: 13.0827, lng: 80.2707 },
+  hyderabad: { lat: 17.3850, lng: 78.4867 },
+  kolkata: { lat: 22.5726, lng: 88.3639 },
+  ahmedabad: { lat: 23.0225, lng: 72.5714 },
+  jaipur: { lat: 26.9124, lng: 75.7873 }
+};
 
 const LocatePage = () => {
   const { user } = useAuth();
@@ -40,6 +54,7 @@ const LocatePage = () => {
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [selectedCity, setSelectedCity] = useState('pune');
   const [userLocation, setUserLocation] = useState(null);
+  const [viewMode, setViewMode] = useState('split'); // 'split' | 'map' | 'cards'
   const [loading, setLoading] = useState(false);
   const [facilities, setFacilities] = useState([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -136,8 +151,7 @@ const LocatePage = () => {
         // If selectedType is one of the camp types, search Google Places for camp keywords
         if (selectedType && selectedType !== 'all' && campKeywords[selectedType]) {
           if (!loc) {
-            // Fallback: load city data but exclude hospitals
-            const cityDataFallback = getFacilitiesByCity(selectedCity).filter(f => f.type !== 'hospital');
+            const cityDataFallback = getFacilitiesByCity(selectedCity);
             setFacilities([...firestoreCampsResults, ...cityDataFallback]);
             setLoading(false);
             return;
@@ -145,14 +159,16 @@ const LocatePage = () => {
 
           // Use API to find nearby camp events (8km radius)
           const results = await searchGooglePlaces(campKeywords[selectedType], loc, 8000, selectedType);
-          // Exclude any places that are hospitals
-          googlePlacesResults = results.filter(r => !(r.rawTypes && r.rawTypes.includes('hospital')));
+          googlePlacesResults = results;
         } else {
-          // Default: load local city healthcare facilities but exclude hospitals
-          googlePlacesResults = getFacilitiesByCity(selectedCity).filter(f => f.type !== 'hospital');
+          // Load local city healthcare facilities (including hospitals and clinics)
+          const cityFacilities = getFacilitiesByCity(selectedCity);
+          googlePlacesResults = selectedType === 'all' 
+            ? cityFacilities 
+            : cityFacilities.filter(f => f.type === selectedType);
         }
 
-        // Merge Firestore camps with Google Places results
+        // Merge Firestore camps with city healthcare results
         const allFacilities = [...firestoreCampsResults, ...googlePlacesResults];
         setFacilities(allFacilities);
 
@@ -347,15 +363,28 @@ const LocatePage = () => {
     }
   ]; // End of old mock data - now removed
 
-  // Updated types: focus on health-related camps and clinics, remove hospitals
+  const handleLocateMe = async () => {
+    try {
+      toast.loading('Detecting your GPS location...', { id: 'gps-loc' });
+      const loc = await getUserLocation();
+      setUserLocation(loc);
+      calculateDistances(loc);
+      toast.success('Location detected! Sorted by distance.', { id: 'gps-loc' });
+    } catch (err) {
+      toast.error('Unable to fetch location. Please check browser permissions.', { id: 'gps-loc' });
+    }
+  };
+
+  // Comprehensive facility types including Hospitals, Clinics, and Camps
   const types = [
-    { id: 'all', name: 'All', icon: MapPinIcon, color: 'gray' },
+    { id: 'all', name: 'All Facilities', icon: MapPinIcon, color: 'gray' },
+    { id: 'hospital', name: 'Hospitals', icon: HeartIcon, color: 'red' },
+    { id: 'clinic', name: 'Clinics', icon: BuildingOfficeIcon, color: 'green' },
     { id: 'blood_donation', name: 'Blood Donation', icon: UserGroupIcon, color: 'red' },
     { id: 'dental_camp', name: 'Dental Camps', icon: BuildingOfficeIcon, color: 'orange' },
     { id: 'treatment_camp', name: 'Treatment Camps', icon: ShieldCheckIcon, color: 'emerald' },
     { id: 'vaccination', name: 'Vaccination Camps', icon: LifebuoyIcon, color: 'purple' },
-    { id: 'eye_camp', name: 'Eye Camps', icon: SparklesIcon, color: 'teal' },
-    { id: 'clinic', name: 'Clinics', icon: BuildingOfficeIcon, color: 'green' }
+    { id: 'eye_camp', name: 'Eye Camps', icon: SparklesIcon, color: 'teal' }
   ];
 
   // Map camp types to Google Places keywords
@@ -367,13 +396,14 @@ const LocatePage = () => {
     eye_camp: 'eye camp'
   };
 
-  // Exclude hospitals from results and support camp categories
+  // Filter facilities by search query and type
   const filteredFacilities = facilities
-    .filter(facility => facility.type !== 'hospital')
     .filter(facility => {
       const name = (facility.name || '').toString().toLowerCase();
       const specialty = (facility.specialty || '').toString().toLowerCase();
-      const matchesSearch = name.includes(searchQuery.toLowerCase()) || specialty.includes(searchQuery.toLowerCase());
+      const address = (facility.address || '').toString().toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q || name.includes(q) || specialty.includes(q) || address.includes(q);
       const matchesType = selectedType === 'all' || facility.type === selectedType;
       return matchesSearch && matchesType;
     });
@@ -482,14 +512,33 @@ const LocatePage = () => {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6"
+          className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
         >
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Locate Health Camps &amp; Events
-          </h1>
-          <p className="text-sm text-gray-600">
-            Find nearby blood donation camps, dental camps, vaccination drives and other health events. Hospital locations are hidden here.
-          </p>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                <HeartIcon className="w-3.5 h-3.5 text-red-600" />
+                Hospital &amp; Care Locator
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-700 text-xs font-bold uppercase tracking-wider">
+                Leaflet Interactive Maps
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+              Locate Hospitals &amp; Healthcare Resources
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Find verified hospitals, 24/7 emergency departments, specialty clinics, and community health camps near you.
+            </p>
+          </div>
+
+          <Link
+            to="/chatbot"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all whitespace-nowrap self-start md:self-auto"
+          >
+            <SparklesIcon className="w-4 h-4" />
+            Ask Health AI Assistant
+          </Link>
         </motion.div>
 
         {/* Loading State */}
@@ -499,83 +548,173 @@ const LocatePage = () => {
           </div>
         ) : (
           <>
-            {/* Search and Filter Bar - Compact Teal Theme */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white rounded-xl shadow-md border border-gray-200 p-4 mb-6"
-        >
-          {/* City Selector */}
-          <div className="mb-3">
-            <label className="text-xs font-semibold text-gray-700 mb-2 flex items-center">
-              <div className="w-6 h-6 bg-teal-100 rounded-md flex items-center justify-center mr-1.5">
-                <GlobeAltIcon className="w-3.5 h-3.5 text-teal-600" />
-              </div>
-              Select City
-            </label>
-            <select
-              value={selectedCity}
-              onChange={(e) => setSelectedCity(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white text-sm font-medium hover:border-teal-500 transition-all"
+            {/* Search, Filter & Location Bar */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="bg-white rounded-xl shadow-md border border-gray-200 p-4 mb-6"
             >
-              {availableCities.map(city => (
-                <option key={city.id} value={city.id}>
-                  {city.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              {/* City Selector and Locate Me */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                <div className="md:col-span-2">
+                  <label className="text-xs font-semibold text-gray-700 mb-1.5 flex items-center">
+                    <div className="w-5 h-5 bg-teal-100 rounded-md flex items-center justify-center mr-1.5">
+                      <GlobeAltIcon className="w-3.5 h-3.5 text-teal-600" />
+                    </div>
+                    Select City / Region
+                  </label>
+                  <select
+                    value={selectedCity}
+                    onChange={(e) => setSelectedCity(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 bg-white text-sm font-medium hover:border-teal-500 transition-all"
+                  >
+                    {availableCities.map(city => (
+                      <option key={city.id} value={city.id}>
+                        {city.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          {/* Search Input */}
-          <div className="relative mb-3">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-teal-600" />
-            <input
-              type="text"
-              placeholder="Search by name, specialty, or services..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 placeholder-gray-400 text-sm font-medium"
-            />
-          </div>
+                <div className="flex flex-col justify-end">
+                  <button
+                    type="button"
+                    onClick={handleLocateMe}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-semibold text-sm transition-all shadow-sm"
+                  >
+                    <MapPinIcon className="w-4 h-4 text-blue-600" />
+                    {userLocation ? 'Update GPS Location' : 'Detect My Location'}
+                  </button>
+                </div>
+              </div>
 
-          {/* Type Filter - Compact Teal Theme */}
-          <div className="flex flex-wrap gap-2">
-            {types.map((type) => {
-              const IconComponent = type.icon;
-              const isActive = selectedType === type.id;
-              return (
-                <button
-                  key={type.id}
-                  onClick={() => setSelectedType(type.id)}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                    isActive
-                      ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-md'
-                      : 'bg-white border border-gray-300 text-gray-700 hover:border-teal-500 hover:bg-teal-50'
-                  }`}
-                >
-                  <IconComponent className="w-4 h-4" />
-                  <span>{type.name}</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
-                    isActive ? 'bg-white/20' : 'bg-gray-200'
-                  }`}>
-                    {facilities.filter(f => type.id === 'all' || f.type === type.id).length}
+              {/* Search Input */}
+              <div className="relative mb-3">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-teal-600" />
+                <input
+                  type="text"
+                  placeholder="Search hospital name, specialty (e.g., Cardiology, Emergency), or address..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-900 placeholder-gray-400 text-sm font-medium"
+                />
+              </div>
+
+              {/* Type Filter & View Mode Toggle */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-gray-100">
+                <div className="flex flex-wrap gap-1.5">
+                  {types.map((type) => {
+                    const IconComponent = type.icon;
+                    const isActive = selectedType === type.id;
+                    const count = facilities.filter(f => type.id === 'all' || f.type === type.id).length;
+                    return (
+                      <button
+                        key={type.id}
+                        onClick={() => setSelectedType(type.id)}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg font-semibold text-xs transition-all ${
+                          isActive
+                            ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-sm'
+                            : 'bg-gray-50 border border-gray-200 text-gray-700 hover:border-teal-500 hover:bg-teal-50'
+                        }`}
+                      >
+                        <IconComponent className="w-3.5 h-3.5" />
+                        <span>{type.name}</span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                          isActive ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-700'
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200 self-start sm:self-auto">
+                  <button
+                    onClick={() => setViewMode('split')}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 ${
+                      viewMode === 'split' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <MapIcon className="w-3.5 h-3.5" />
+                    Split View
+                  </button>
+                  <button
+                    onClick={() => setViewMode('map')}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 ${
+                      viewMode === 'map' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Map Only
+                  </button>
+                  <button
+                    onClick={() => setViewMode('cards')}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 ${
+                      viewMode === 'cards' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Cards Only
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Interactive Leaflet Map Section */}
+            {(viewMode === 'split' || viewMode === 'map') && (
+              <motion.div
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 bg-white p-3 rounded-2xl shadow-md border border-gray-200"
+              >
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse"></span>
+                    <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                      Interactive Leaflet Hospital Map
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      ({filteredFacilities.length} facilities mapped in {selectedCity.toUpperCase()})
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-500 hidden sm:inline">
+                    Click any marker to view hospital details &amp; directions
                   </span>
-                </button>
-              );
-            })}
-          </div>
-        </motion.div>
+                </div>
 
-        {/* Results Count */}
-        <div className="mb-4">
-          <p className="text-gray-700 text-sm font-semibold">
-            Found <span className="text-teal-600">{filteredFacilities.length}</span> health camps &amp; events
-          </p>
-        </div>
+                <HospitalMapLeaflet
+                  facilities={filteredFacilities}
+                  userLocation={userLocation}
+                  selectedFacility={selectedLocation}
+                  onSelectFacility={(facility) => {
+                    setSelectedLocation(facility);
+                  }}
+                  center={userLocation || CITY_COORDINATES[selectedCity] || CITY_COORDINATES.pune}
+                  zoom={12}
+                  className={viewMode === 'map' ? 'h-[620px] w-full rounded-xl' : 'h-[440px] w-full rounded-xl'}
+                />
+              </motion.div>
+            )}
 
-        {/* Facilities Grid - Compact Healthcare Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Results Header (if not map only) */}
+            {viewMode !== 'map' && (
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-gray-700 text-sm font-semibold">
+                  Found <span className="text-teal-600 font-bold">{filteredFacilities.length}</span> healthcare facilities &amp; camps
+                  {userLocation && <span className="text-blue-600 font-normal ml-1">• Sorted by distance from you</span>}
+                </p>
+                {selectedLocation && (
+                  <span className="text-xs text-teal-700 bg-teal-50 px-2 py-1 rounded-md font-medium">
+                    Selected: {selectedLocation.name}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Facilities Cards Grid (if not map only) */}
+            {viewMode !== 'map' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredFacilities.map((facility, index) => {
             const TypeIcon = getTypeIcon(facility.type);
             return (
@@ -767,21 +906,22 @@ const LocatePage = () => {
             );
           })}
         </div>
+      )}
 
-        {/* No Results */}
-        {filteredFacilities.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-16"
-          >
-            <MapPinIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No facilities found</h3>
-            <p className="text-gray-600">Try adjusting your search or filters</p>
-          </motion.div>
-        )}
-          </>
-        )}
+      {/* No Results */}
+      {filteredFacilities.length === 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center py-16"
+        >
+          <MapPinIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">No facilities found</h3>
+          <p className="text-gray-600">Try adjusting your search or filters</p>
+        </motion.div>
+      )}
+    </>
+  )}
 
         {/* Details Modal */}
         {showDetailsModal && selectedFacilityDetails && (

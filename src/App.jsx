@@ -18,8 +18,10 @@ import DebugPrescriptions from '@/pages/patient/DebugPrescriptions';
 import LocatePage from '@/pages/patient/LocatePage';
 import VideoConsultation from '@/pages/patient/VideoConsultation';
 import PatientVideoAppointments from '@/pages/patient/PatientVideoAppointments';
+import InstantCallPage from '@/pages/patient/InstantCallPage';
 import HealthNews from '@/pages/patient/HealthNews';
 import DoctorDashboard from '@/pages/doctor/DoctorDashboard_Clean';
+import DoctorInstantCalls from '@/pages/doctor/DoctorInstantCalls';
 import DoctorAppointments from '@/pages/doctor/DoctorAppointments';
 import DoctorPatients from '@/pages/doctor/DoctorPatients';
 import DoctorSchedule from '@/pages/doctor/DoctorSchedule';
@@ -215,6 +217,14 @@ function App() {
                   } 
                 />
                 <Route 
+                  path="/patient/instant-call" 
+                  element={
+                    <ProtectedRoute>
+                      <InstantCallPage />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
                   path="/patient/video-consultation/:appointmentId" 
                   element={
                     <ProtectedRoute>
@@ -283,6 +293,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <DoctorPatientRecords />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/doctor/instant-calls" 
+                  element={
+                    <ProtectedRoute>
+                      <DoctorInstantCalls />
                     </ProtectedRoute>
                   } 
                 />

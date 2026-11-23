@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { appointmentServices } from '../../services/firebaseServices';
+import { subscribeToWaitingInstantCalls, acceptInstantCall, rejectInstantCall } from '../../services/instantCallService';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import {
   CalendarIcon,
@@ -18,7 +19,10 @@ import {
   ArrowTrendingUpIcon,
   SparklesIcon,
   ChartBarIcon,
-  ArrowRightIcon
+  ArrowRightIcon,
+  BoltIcon,
+  PhoneArrowUpRightIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -108,7 +112,7 @@ const TodayAppointments = ({ appointments }) => {
             <div className="bg-white rounded-full p-6 inline-block mb-4 shadow-lg">
               <CalendarIcon className="w-20 h-20 text-blue-300" />
             </div>
-            <p className="text-gray-600 text-xl font-semibold mb-2">All Clear! 🎉</p>
+            <p className="text-gray-600 text-xl font-semibold mb-2">All Clear!</p>
             <p className="text-gray-500 text-sm">No appointments scheduled for today</p>
             <Link
               to="/doctor/appointments"
@@ -272,8 +276,12 @@ const TodayAppointments = ({ appointments }) => {
 
 const DoctorDashboard = () => {
   const { user, userProfile } = useAuth();
+  const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [waitingInstantCalls, setWaitingInstantCalls] = useState([]);
+  const [acceptingCallId, setAcceptingCallId] = useState(null);
+  const [rejectingCallId, setRejectingCallId] = useState(null);
   const [stats, setStats] = useState({
     patients: 666,
     income: 2111,
@@ -284,8 +292,69 @@ const DoctorDashboard = () => {
   useEffect(() => {
     if (user) {
       fetchAppointments();
+      const unsubCalls = subscribeToWaitingInstantCalls(user.uid, (calls) => {
+        setWaitingInstantCalls(calls || []);
+      });
+      return () => {
+        if (unsubCalls) unsubCalls();
+      };
     }
   }, [user]);
+
+  const handleAcceptCall = async (call) => {
+    try {
+      setAcceptingCallId(call.id);
+      toast.loading('Claiming call (First-Come, First-Served)...', { id: 'accept-call' });
+
+      const doctorData = {
+        id: user.uid,
+        name: userProfile?.name || user?.displayName || 'Doctor'
+      };
+
+      const result = await acceptInstantCall(call.id, doctorData, call.collectionName);
+
+      if (result.success) {
+        toast.success('Call claimed successfully! Joining room...', { id: 'accept-call' });
+        setTimeout(() => {
+          navigate(`/video-call/${result.callRoomId}`);
+        }, 800);
+      } else if (result.reason === 'ALREADY_ACCEPTED') {
+        toast.error(`Call was already accepted by Dr. ${result.acceptedBy || 'another doctor'} (FCFS).`, { id: 'accept-call' });
+      } else {
+        toast.error('Could not claim call. Please try again.', { id: 'accept-call' });
+      }
+    } catch (err) {
+      console.error('Error accepting call:', err);
+      toast.error('Failed to claim call.', { id: 'accept-call' });
+    } finally {
+      setAcceptingCallId(null);
+    }
+  };
+
+  const handleRejectCall = async (call, reason = 'Currently attending another patient') => {
+    try {
+      setRejectingCallId(call.id);
+      toast.loading('Declining call...', { id: 'reject-call' });
+
+      const doctorData = {
+        id: user.uid,
+        name: userProfile?.name || user?.displayName || 'Doctor'
+      };
+
+      const result = await rejectInstantCall(call.id, doctorData, reason, call.collectionName);
+
+      if (result.success) {
+        toast.success('Call request declined. Re-routed to other available doctors.', { id: 'reject-call' });
+      } else {
+        toast.error('Could not decline call. Please try again.', { id: 'reject-call' });
+      }
+    } catch (err) {
+      console.error('Error declining call:', err);
+      toast.error('Failed to decline call.', { id: 'reject-call' });
+    } finally {
+      setRejectingCallId(null);
+    }
+  };
 
   const fetchAppointments = async () => {
     try {
@@ -326,6 +395,13 @@ const DoctorDashboard = () => {
   };
 
   const quickActions = [
+    {
+      name: 'Instant Calls',
+      description: 'Review patient requests, accept or decline live calls with AI priority',
+      icon: BoltIcon,
+      href: '/doctor/instant-calls',
+      color: 'bg-gradient-to-r from-rose-500 via-red-500 to-amber-500',
+    },
     {
       name: 'Appointment Management',
       description: 'Review and manage patient appointments',
@@ -459,6 +535,179 @@ const DoctorDashboard = () => {
                 </Link>
               </div>
             </div>
+          </div>
+        </motion.div>
+
+        {/* Real-time Instant Calls Queue (First-Come, First-Served) */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <div className={`rounded-3xl p-6 border shadow-lg transition-all ${
+            waitingInstantCalls.length > 0 
+              ? 'bg-gradient-to-r from-rose-50 via-amber-50 to-orange-50 border-rose-300' 
+              : 'bg-white border-gray-100'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl ${
+                  waitingInstantCalls.length > 0 
+                    ? 'bg-rose-600 text-white animate-pulse' 
+                    : 'bg-emerald-100 text-emerald-700'
+                }`}>
+                  <BoltIcon className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-gray-900">
+                      Instant Call Queue (First-Come, First-Served)
+                    </h2>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${
+                      waitingInstantCalls.length > 0
+                        ? 'bg-rose-500 text-white animate-pulse'
+                        : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {waitingInstantCalls.length} Waiting
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Groq AI triaged patient calls • Normal health issues visible to all doctors • Accept or reject with health issue details
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/doctor/instant-calls"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all"
+                >
+                  <BoltIcon className="w-4 h-4 text-yellow-300" />
+                  <span>Open Dedicated Calls Center</span>
+                  <ArrowRightIcon className="w-3.5 h-3.5" />
+                </Link>
+
+                {waitingInstantCalls.length === 0 && (
+                  <div className="hidden lg:flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span>System Active • Ready for calls</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Waiting Calls List */}
+            {waitingInstantCalls.length > 0 && (
+              <div className="space-y-4">
+                {waitingInstantCalls.map((call) => {
+                  const isCritical = call.priority === 'CRITICAL';
+                  const isHigh = call.priority === 'HIGH';
+                  const isNormal = call.priority === 'LOW' || call.priority === 'MEDIUM';
+                  const isAccepting = acceptingCallId === call.id;
+                  const isRejecting = rejectingCallId === call.id;
+
+                  return (
+                    <div
+                      key={call.id}
+                      className={`p-5 rounded-2xl bg-white border-2 shadow-sm transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+                        isCritical 
+                          ? 'border-red-400 shadow-red-100' 
+                          : isHigh 
+                          ? 'border-orange-300' 
+                          : 'border-blue-200'
+                      }`}
+                    >
+                      <div className="space-y-2 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded-lg text-xs font-black tracking-wider uppercase ${
+                            isCritical 
+                              ? 'bg-red-600 text-white animate-pulse' 
+                              : isHigh 
+                              ? 'bg-orange-500 text-white' 
+                              : 'bg-blue-600 text-white'
+                          }`}>
+                            {call.priority} PRIORITY
+                          </span>
+                          {isNormal && (
+                            <span className="px-2 py-0.5 rounded-lg text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              🩺 Normal Health Issue (All Doctors)
+                            </span>
+                          )}
+                          <h3 className="text-base font-extrabold text-gray-900">
+                            {call.patientName}
+                          </h3>
+                          <span className="text-xs text-gray-500 font-medium">
+                            • Specialty: <strong className="text-gray-800">{call.recommendedSpecialty || 'General Physician'}</strong>
+                          </span>
+                        </div>
+
+                        {/* Patient Health Issue & Description */}
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">
+                            Health Issue / Problem Description:
+                          </div>
+                          <p className="text-sm font-semibold text-slate-900 leading-snug">
+                            "{call.problemDescription}"
+                          </p>
+                          {call.symptoms && call.symptoms.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {call.symptoms.map((sym, sIdx) => (
+                                <span key={sIdx} className="text-[11px] bg-white border border-slate-300 text-slate-700 px-2 py-0.5 rounded-full font-medium">
+                                  {sym}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {call.triageSummary && (
+                          <p className="text-xs text-indigo-900 bg-indigo-50/90 p-2.5 rounded-xl border border-indigo-100 font-medium">
+                            <span className="font-bold">Groq AI Analysis:</span> {call.triageSummary}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Doctor Action Controls: Accept (FCFS) or Decline/Reject */}
+                      <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end justify-between gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleRejectCall(call)}
+                            disabled={isRejecting || isAccepting}
+                            className="px-3.5 py-2.5 border border-red-300 hover:bg-red-50 text-red-600 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                            title="Decline this call"
+                          >
+                            <XMarkIcon className="w-4 h-4" />
+                            <span>{isRejecting ? 'Declining...' : 'Reject'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleAcceptCall(call)}
+                            disabled={isAccepting || isRejecting}
+                            className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 whitespace-nowrap"
+                          >
+                            {isAccepting ? (
+                              <>
+                                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                <span>Claiming...</span>
+                              </>
+                            ) : (
+                              <>
+                                <BoltIcon className="w-4 h-4 text-yellow-300" />
+                                <span>Accept &amp; Join (FCFS)</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <span className="text-[11px] text-gray-400 font-medium text-center lg:text-right flex items-center justify-center lg:justify-end gap-1">
+                          <ClockIcon className="w-3.5 h-3.5 text-teal-600 inline" />
+                          First-Come, First-Served
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </motion.div>
 

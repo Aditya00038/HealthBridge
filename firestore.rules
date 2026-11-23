@@ -146,6 +146,26 @@ service cloud.firestore {
     match /health_camps/{document=**} {
       allow list: if request.auth != null;
     }
+
+    // Instant Calls (Live Emergency & Routine Consultations - FCFS)
+    match /instant_calls/{callId} {
+      // Authenticated patients can create instant call requests
+      allow create: if request.auth != null;
+      
+      // Authenticated users (patients and doctors) can read instant call details
+      allow read: if request.auth != null;
+      
+      // Doctors can accept or reject/decline; patients can cancel
+      allow update: if request.auth != null;
+      
+      // Deleting instant call requests
+      allow delete: if request.auth != null;
+    }
+
+    // Allow listing instant calls for real-time queue queries
+    match /instant_calls/{document=**} {
+      allow list: if request.auth != null;
+    }
     
     // Allow read access to public data
     match /public/{document=**} {

@@ -12,6 +12,7 @@ import {
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import ReactMarkdown from 'react-markdown';
+import { sendGroqChatMessage } from '@/services/groqChatService';
 
 const ChatbotFullScreen = () => {
   const [messages, setMessages] = useState([]);
@@ -113,46 +114,30 @@ Quick access to life-saving information and when to seek immediate care
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: inputMessage,
-          image: selectedImage
-        })
-      });
+      const historyPayload = [...messages, userMessage].map(m => ({
+        role: m.type === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
 
-      const data = await response.json();
+      const data = await sendGroqChatMessage(historyPayload);
 
       if (data.success) {
         const aiMessage = {
           type: 'ai',
           content: data.response,
           timestamp: data.timestamp,
-          hasImageAnalysis: data.hasImageAnalysis,
-          confidence: data.hasImageAnalysis ? 92 : 88
+          hasImageAnalysis: false,
+          confidence: 95
         };
         setMessages(prev => [...prev, aiMessage]);
       } else {
-        throw new Error(data.error || 'Failed to get response');
+        throw new Error('Failed to get response');
       }
     } catch (error) {
       console.error('Error:', error);
       const errorMessage = {
         type: 'ai',
-        content: `## ⚠️ Connection Error
-
-I'm having trouble connecting to the medical AI server. Please ensure:
-
-1. The Python Flask backend is running on port 5000
-2. Run: \`python python-backend/chatbot_api.py\`
-3. Check your internet connection
-
-**Error Details:** ${error.message}
-
-*Please try again in a moment.*`,
+        content: `## ⚠️ Connection Error\n\nI was unable to retrieve a response from Groq AI. Please check your network or try again in a moment.\n\n*Error:* ${error.message}`,
         timestamp: new Date().toISOString(),
         isError: true
       };

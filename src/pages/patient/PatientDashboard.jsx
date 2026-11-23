@@ -14,7 +14,11 @@ import {
   SparklesIcon,
   StarIcon,
   MapPinIcon,
-  ChatBubbleLeftRightIcon
+  ChatBubbleLeftRightIcon,
+  ShoppingBagIcon,
+  NewspaperIcon,
+  BoltIcon,
+  PhoneArrowUpRightIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 import { appointmentServices } from '../../services/firebaseServices';
@@ -128,11 +132,11 @@ const PatientDashboard = () => {
       premium: false
     },
     {
-      name: 'Video Calls',
-      description: 'Manage virtual consultations',
-      icon: VideoCameraIcon,
-      href: '/patient/video-appointments',
-      color: 'bg-gradient-to-r from-cyan-500 to-blue-500',
+      name: 'Instant Call',
+      description: 'AI-triaged live consultation with doctors',
+      icon: BoltIcon,
+      href: '/patient/instant-call',
+      color: 'bg-gradient-to-r from-rose-500 via-red-500 to-amber-500',
       premium: false
     },
     {
@@ -168,11 +172,19 @@ const PatientDashboard = () => {
       premium: false
     },
     {
-      name: 'My Profile',
-      description: 'Manage your personal information',
-      icon: UserIcon,
-      href: '/patient/profile',
-      color: 'bg-gradient-to-r from-indigo-500 to-indigo-600',
+      name: 'Shop Medicine',
+      description: 'Order medicines & healthcare products',
+      icon: ShoppingBagIcon,
+      href: '/medicine-shop',
+      color: 'bg-gradient-to-r from-emerald-500 to-teal-600',
+      premium: false
+    },
+    {
+      name: 'Health News',
+      description: 'Latest healthcare updates & research',
+      icon: NewspaperIcon,
+      href: '/patient/health-news',
+      color: 'bg-gradient-to-r from-rose-500 to-pink-600',
       premium: false
     }
   ];

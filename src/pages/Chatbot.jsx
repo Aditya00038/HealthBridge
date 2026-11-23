@@ -12,6 +12,7 @@ import {
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import ReactMarkdown from 'react-markdown';
+import { sendGroqChatMessage } from '@/services/groqChatService';
 
 const Chatbot = () => {
   const [messages, setMessages] = useState([]);
@@ -117,51 +118,21 @@ Current events, how-to guides, explanations, advice on any subject
     setIsLoading(true);
 
     try {
-      // Use Hugging Face Inference API (Free, no API key needed for some models)
-      const response = await fetch('https://api-inference.huggingface.co/models/microsoft/DialoGPT-large', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inputs: currentMessage,
-          parameters: {
-            max_length: 500,
-            temperature: 0.9,
-            top_p: 0.95,
-            do_sample: true
-          }
-        })
-      });
+      const historyPayload = [...messages, userMessage].map(m => ({
+        role: m.type === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
 
-      if (!response.ok) {
-        throw new Error('API request failed');
-      }
-
-      const data = await response.json();
-      
-      // Extract AI response
-      let aiResponse = '';
-      if (Array.isArray(data) && data.length > 0 && data[0].generated_text) {
-        aiResponse = data[0].generated_text;
-      } else if (typeof data === 'string') {
-        aiResponse = data;
-      } else {
-        // Fallback to intelligent local response
-        aiResponse = generateIntelligentResponse(currentMessage);
-      }
+      const res = await sendGroqChatMessage(historyPayload);
 
       const aiMessage = {
         type: 'ai',
-        content: aiResponse,
-        timestamp: new Date().toISOString()
+        content: res.response,
+        timestamp: res.timestamp || new Date().toISOString()
       };
       setMessages(prev => [...prev, aiMessage]);
-
     } catch (error) {
       console.error('Error:', error);
-      
-      // Fallback to local intelligent responses if API fails
       const aiMessage = {
         type: 'ai',
         content: generateIntelligentResponse(currentMessage),

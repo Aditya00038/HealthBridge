@@ -45,6 +45,7 @@ const NavbarClean = () => {
 
   const doctorNavigation = [
     { name: 'Dashboard', href: '/doctor/dashboard' },
+    { name: 'Instant Calls', href: '/doctor/instant-calls' },
     { name: 'My Schedule', href: '/doctor/schedule' },
     { name: 'Appointments', href: '/doctor/appointments' },
     { name: 'Patient Records', href: '/doctor/patient-records' },
