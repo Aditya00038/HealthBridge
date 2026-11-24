@@ -257,6 +257,22 @@ function App() {
                   } 
                 />
                 <Route 
+                  path="/health-news" 
+                  element={
+                    <ProtectedRoute>
+                      <HealthNews />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/news" 
+                  element={
+                    <ProtectedRoute>
+                      <HealthNews />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
                   path="/locate" 
                   element={
                     <ProtectedRoute>

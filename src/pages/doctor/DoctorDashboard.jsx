@@ -36,13 +36,6 @@ import { useAuth } from '../../contexts/AuthContext';
       color: 'bg-gradient-to-r from-blue-500 to-blue-600',
     },
     {
-      name: 'Video Consults',
-      description: 'Start or join video consultations',
-      icon: VideoCameraIcon,
-      href: '/video-call',
-      color: 'bg-gradient-to-r from-cyan-500 to-blue-500',
-    },
-    {
       name: 'Patient Records',
       description: 'Access and update patient medical records',
       icon: DocumentTextIcon,

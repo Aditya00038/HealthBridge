@@ -371,7 +371,12 @@ const PatientAppointments = () => {
               const isExpanded = expandedAppointment === appointment.id;
               const appointmentDateTime = parseAppointmentDateTime(appointment);
               const callIsPast = appointmentDateTime && appointmentDateTime < new Date();
-              const showVideoPrepButton = appointment.type === 'video' && !callIsPast;
+              const isVideo = appointment.type === 'video' || 
+                              appointment.type === 'video_call' || 
+                              appointment.appointmentType === 'video' ||
+                              (typeof appointment.appointmentNumber === 'string' && appointment.appointmentNumber.startsWith('VC'));
+              const canJoinCall = isVideo && appointment.status !== 'cancelled' && appointment.status !== 'rejected';
+              const showVideoPrepButton = isVideo && !callIsPast;
 
               return (
                 <motion.div
@@ -397,6 +402,12 @@ const PatientAppointments = () => {
                             {appointment.specialty || 'General Practitioner'}
                           </p>
                           <div className="flex flex-wrap gap-2">
+                            {isVideo && (
+                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200">
+                                <VideoCameraIcon className="w-3.5 h-3.5 text-teal-600" />
+                                Video Call
+                              </span>
+                            )}
                             <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border ${statusBadge.class}`}>
                               <StatusIcon className="w-4 h-4" />
                               {statusBadge.text}
@@ -429,13 +440,22 @@ const PatientAppointments = () => {
 
                         {/* Action Buttons */}
                         <div className="flex flex-wrap gap-2">
+                          {canJoinCall && (
+                            <Link
+                              to={`/video-call/${appointment.id}`}
+                              className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg text-sm font-semibold shadow-sm hover:shadow-md transition-all hover:scale-105 flex items-center gap-1.5"
+                            >
+                              <VideoCameraIcon className="w-4 h-4" />
+                              <span>Join Video Call</span>
+                            </Link>
+                          )}
                           {showVideoPrepButton && (
                             <Link
                               to={`/patient/video-consultation/${appointment.id}`}
-                              className="px-4 py-2 bg-gradient-to-r from-teal-500 to-cyan-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all hover:scale-105 flex items-center gap-1"
+                              className="px-4 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-semibold hover:bg-indigo-100 transition-all flex items-center gap-1"
                             >
                               <VideoCameraIcon className="w-4 h-4" />
-                              Prepare Call
+                              <span>Prep Room</span>
                             </Link>
                           )}
                           {appointment.paymentStatus !== 'paid' && appointment.status === 'confirmed' && (
@@ -612,17 +632,20 @@ const PatientAppointments = () => {
 
                           {/* Action Buttons */}
                           <div className="flex flex-wrap gap-3">
+                            {canJoinCall && (
+                              <Link
+                                to={`/video-call/${appointment.id}`}
+                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition-all hover:scale-105"
+                              >
+                                <VideoCameraIcon className="w-5 h-5" />
+                                <span>Join Video Call</span>
+                              </Link>
+                            )}
                             {appointment.status === 'confirmed' && (
-                              <>
-                                <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all hover:scale-105">
-                                  <VideoCameraIcon className="w-5 h-5" />
-                                  Join Video Call
-                                </button>
-                                <button className="flex items-center gap-2 px-6 py-3 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:border-gray-300 transition-all">
-                                  <ArrowPathIcon className="w-5 h-5" />
-                                  Reschedule
-                                </button>
-                              </>
+                              <button className="flex items-center gap-2 px-6 py-3 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:border-gray-300 transition-all">
+                                <ArrowPathIcon className="w-5 h-5" />
+                                Reschedule
+                              </button>
                             )}
                             {appointment.status === 'pending' && (
                               <button className="flex items-center gap-2 px-6 py-3 bg-red-100 text-red-700 rounded-xl font-semibold hover:bg-red-200 transition-all">

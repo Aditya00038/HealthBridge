@@ -1,542 +1,489 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   NewspaperIcon,
   MagnifyingGlassIcon,
+  ArrowTopRightOnSquareIcon,
+  ArrowPathIcon,
+  ClockIcon,
+  CalendarIcon,
+  GlobeAltIcon,
+  BuildingOffice2Icon,
   HeartIcon,
   ShieldCheckIcon,
-  HomeIcon,
-  UserGroupIcon,
-  BanknotesIcon,
-  SparklesIcon,
-  ArrowTopRightOnSquareIcon,
-  CalendarIcon,
-  ClockIcon
+  ShareIcon,
+  CheckIcon,
+  XMarkIcon,
+  PhoneIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { 
+  fetchLiveHealthNews, 
+  GOVERNMENT_HEALTH_SCHEMES 
+} from '@/services/healthNewsService';
 
-const governmentSchemes = [
-  {
-    id: 1,
-    title: 'Ayushman Bharat - Pradhan Mantri Jan Arogya Yojana (PM-JAY)',
-    category: 'Insurance',
-    icon: ShieldCheckIcon,
-    color: 'blue',
-    description: 'Free health insurance coverage of ₹5 lakh per family per year for secondary and tertiary care hospitalization.',
-    eligibility: 'Economically vulnerable families based on SECC 2011 database',
-    benefits: [
-      'Coverage of ₹5 lakh per family per year',
-      'Cashless treatment at empanelled hospitals',
-      'Covers over 1,500 medical procedures',
-      'No cap on family size or age'
-    ],
-    website: 'https://pmjay.gov.in/',
-    contactNumber: '14555'
-  },
-  {
-    id: 2,
-    title: 'Pradhan Mantri Suraksha Bima Yojana (PMSBY)',
-    category: 'Insurance',
-    icon: ShieldCheckIcon,
-    color: 'emerald',
-    description: 'Accident insurance scheme offering coverage for accidental death and disability.',
-    eligibility: 'Individuals aged 18-70 years with bank account',
-    benefits: [
-      '₹2 lakh for accidental death',
-      '₹2 lakh for total permanent disability',
-      '₹1 lakh for partial permanent disability',
-      'Premium of only ₹20 per year'
-    ],
-    website: 'https://www.india.gov.in/spotlight/pradhan-mantri-suraksha-bima-yojana',
-    contactNumber: '1800-180-1111'
-  },
-  {
-    id: 3,
-    title: 'Janani Suraksha Yojana (JSY)',
-    category: 'Maternal Health',
-    icon: HeartIcon,
-    color: 'pink',
-    description: 'Safe motherhood intervention program to reduce maternal and neonatal mortality.',
-    eligibility: 'Pregnant women preferably from BPL families',
-    benefits: [
-      'Cash assistance for institutional delivery',
-      '₹1,400 for rural areas, ₹1,000 for urban areas',
-      'Free delivery services',
-      'Post-delivery care'
-    ],
-    website: 'https://nhm.gov.in/index1.php?lang=1&level=3&sublinkid=841&lid=309',
-    contactNumber: '1800-180-1104'
-  },
-  {
-    id: 4,
-    title: 'Rashtriya Swasthya Bima Yojana (RSBY)',
-    category: 'Insurance',
-    icon: UserGroupIcon,
-    color: 'indigo',
-    description: 'Health insurance scheme for Below Poverty Line (BPL) families.',
-    eligibility: 'BPL families registered in the state',
-    benefits: [
-      'Coverage of ₹30,000 per family per year',
-      'Cashless hospitalization',
-      'Covers pre-existing diseases',
-      'Transport allowance'
-    ],
-    website: 'https://www.rsby.gov.in/',
-    contactNumber: '1800-345-3886'
-  },
-  {
-    id: 5,
-    title: 'National Health Mission (NHM)',
-    category: 'Healthcare Services',
-    icon: HomeIcon,
-    color: 'purple',
-    description: 'Comprehensive health programs for rural and urban areas.',
-    eligibility: 'All citizens, especially in rural and underserved areas',
-    benefits: [
-      'Free essential drugs and diagnostics',
-      'Maternal and child health services',
-      'Disease control programs',
-      'Health infrastructure development'
-    ],
-    website: 'https://nhm.gov.in/',
-    contactNumber: '1800-180-1104'
-  },
-  {
-    id: 6,
-    title: 'Pradhan Mantri Bhartiya Janaushadhi Kendra (PMBJK)',
-    category: 'Medicine',
-    icon: BanknotesIcon,
-    color: 'green',
-    description: 'Generic medicines at affordable prices through dedicated stores.',
-    eligibility: 'All citizens',
-    benefits: [
-      'Generic medicines at 50-90% lower prices',
-      '1,500+ medicines available',
-      'Same quality as branded medicines',
-      '9,000+ stores across India'
-    ],
-    website: 'https://janaushadhi.gov.in/',
-    contactNumber: '1800-180-1800'
-  }
+const CATEGORIES = [
+  { id: 'all', name: 'All News', icon: GlobeAltIcon },
+  { id: 'india', name: 'India Health', icon: BuildingOffice2Icon },
+  { id: 'global', name: 'Global Research', icon: SparklesIcon },
+  { id: 'wellness', name: 'Wellness & Diet', icon: HeartIcon },
+  { id: 'schemes', name: 'Government Schemes', icon: ShieldCheckIcon }
 ];
 
 const HealthNews = () => {
+  const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [activeTab, setActiveTab] = useState('schemes');
-  const [newsArticles, setNewsArticles] = useState([]);
-  const [loadingNews, setLoadingNews] = useState(false);
-  const [newsPage, setNewsPage] = useState(1);
-  const [selectedNewsCategory, setSelectedNewsCategory] = useState('health');
+  const [articles, setArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch real health news from NewsAPI
+  // Load news when category changes
   useEffect(() => {
-    if (activeTab === 'news') {
-      fetchHealthNews();
+    if (activeCategory !== 'schemes') {
+      loadNews(activeCategory, false);
+    } else {
+      setLoading(false);
     }
-  }, [activeTab, selectedNewsCategory, newsPage]);
+  }, [activeCategory]);
 
-  const fetchHealthNews = async () => {
-    setLoadingNews(true);
+  const loadNews = async (category, forceRefresh = false) => {
+    if (forceRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
     try {
-      // Check if API key is available
-      const apiKey = import.meta.env.VITE_NEWS_API_KEY;
-      
-      if (!apiKey) {
-        // Fallback to demo data if no API key
-        setNewsArticles([
-          {
-            title: 'India Launches Universal Immunization Programme Expansion',
-            description: 'Government expands vaccination coverage to include newer vaccines for children and adults across the country.',
-            url: '#',
-            urlToImage: 'https://images.unsplash.com/photo-1584820927498-cfe5211fd8bf?w=400&h=250&fit=crop',
-            publishedAt: '2024-01-15T10:00:00Z',
-            source: { name: 'Health Ministry' }
-          },
-          {
-            title: 'New Guidelines for Diabetes Management Released',
-            description: 'Health Ministry releases comprehensive guidelines for diabetes prevention and management in India.',
-            url: '#',
-            urlToImage: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=400&h=250&fit=crop',
-            publishedAt: '2024-01-10T10:00:00Z',
-            source: { name: 'Medical Journal' }
-          },
-          {
-            title: 'Mental Health Awareness Month: Free Counseling Services',
-            description: 'Free mental health counseling services available at all government hospitals this month.',
-            url: '#',
-            urlToImage: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=250&fit=crop',
-            publishedAt: '2024-01-05T10:00:00Z',
-            source: { name: 'Health Department' }
-          },
-          {
-            title: 'Nationwide Eye Health Screening Campaign',
-            description: 'Free eye check-ups and cataract surgeries being conducted across rural areas of India.',
-            url: '#',
-            urlToImage: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=250&fit=crop',
-            publishedAt: '2023-12-28T10:00:00Z',
-            source: { name: 'Eye Care Foundation' }
-          },
-          {
-            title: 'Ayushman Bharat Digital Mission Expands Coverage',
-            description: 'Digital health IDs now available for all citizens to access medical records seamlessly.',
-            url: '#',
-            urlToImage: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400&h=250&fit=crop',
-            publishedAt: '2023-12-20T10:00:00Z',
-            source: { name: 'Digital Health Authority' }
-          },
-          {
-            title: 'India Reports Significant Decline in Tuberculosis Cases',
-            description: 'TB cases drop by 20% following nationwide awareness and treatment programs.',
-            url: '#',
-            urlToImage: 'https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=400&h=250&fit=crop',
-            publishedAt: '2023-12-15T10:00:00Z',
-            source: { name: 'WHO India' }
-          }
-        ]);
-        setLoadingNews(false);
-        return;
+      const data = await fetchLiveHealthNews(category, forceRefresh);
+      setArticles(data || []);
+      if (forceRefresh) {
+        toast.success('Health news updated');
       }
-
-      // Fetch from NewsAPI
-      const response = await fetch(
-        `https://newsapi.org/v2/everything?q=${selectedNewsCategory}+India&language=en&sortBy=publishedAt&pageSize=12&page=${newsPage}&apiKey=${apiKey}`
-      );
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch news');
-      }
-      
-      const data = await response.json();
-      setNewsArticles(data.articles || []);
-    } catch (error) {
-      console.error('Error fetching news:', error);
-      toast.error('Failed to load news. Using demo articles.');
-      // Keep existing demo articles
+    } catch (err) {
+      console.error('Error loading news:', err);
+      toast.error('Unable to fetch live news. Showing curated articles.');
     } finally {
-      setLoadingNews(false);
+      setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
-  const newsCategories = [
-    { id: 'health', name: 'Health' },
-    { id: 'medical', name: 'Medical' },
-    { id: 'healthcare', name: 'Healthcare' },
-    { id: 'wellness', name: 'Wellness' },
-    { id: 'mental+health', name: 'Mental Health' },
-    { id: 'vaccination', name: 'Vaccination' }
-  ];
-
-  const categories = [
-    { id: 'all', name: 'All', icon: SparklesIcon },
-    { id: 'Insurance', name: 'Insurance', icon: ShieldCheckIcon },
-    { id: 'Maternal Health', name: 'Maternal Health', icon: HeartIcon },
-    { id: 'Healthcare Services', name: 'Services', icon: HomeIcon },
-    { id: 'Medicine', name: 'Medicine', icon: BanknotesIcon }
-  ];
-
-  const filteredSchemes = governmentSchemes.filter(scheme => {
-    const matchesSearch = scheme.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         scheme.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || scheme.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
-
-  const filteredNews = newsArticles.filter(article =>
-    article.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    article.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleCopyLink = (url, title) => {
+    if (!url || url === '#') {
+      toast.error('No external URL available');
+      return;
+    }
+    navigator.clipboard.writeText(url);
+    toast.success(`Copied: "${title.slice(0, 30)}..."`);
+  };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    if (!dateString) return 'Recent';
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffHours = Math.floor((now - date) / (1000 * 60 * 60));
+      
+      if (diffHours < 1) return 'Just now';
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return 'Yesterday';
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return 'Recent';
+    }
   };
 
+  // Filtered lists based on search
+  const filteredArticles = articles.filter(article => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      (article.title || '').toLowerCase().includes(q) ||
+      (article.description || '').toLowerCase().includes(q) ||
+      (article.source || '').toLowerCase().includes(q)
+    );
+  });
+
+  const filteredSchemes = GOVERNMENT_HEALTH_SCHEMES.filter(scheme => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      scheme.title.toLowerCase().includes(q) ||
+      scheme.description.toLowerCase().includes(q) ||
+      scheme.category.toLowerCase().includes(q)
+    );
+  });
+
+  const topFeaturedArticle = filteredArticles.length > 0 && !searchQuery.trim() && activeCategory !== 'schemes'
+    ? filteredArticles[0]
+    : null;
+
+  const remainingArticles = topFeaturedArticle 
+    ? filteredArticles.slice(1) 
+    : filteredArticles;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 py-8 px-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="max-w-7xl mx-auto"
-      >
-        {/* Header */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <NewspaperIcon className="h-8 w-8 text-indigo-600" />
-            <h1 className="text-3xl font-bold text-gray-800">Health Information Hub</h1>
-          </div>
-          <p className="text-gray-600">
-            Explore government health schemes and stay updated with latest health news
-          </p>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-white rounded-2xl shadow-lg p-2 mb-6">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setActiveTab('schemes')}
-              className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
-                activeTab === 'schemes'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Government Schemes
-            </button>
-            <button
-              onClick={() => setActiveTab('news')}
-              className={`flex-1 py-3 px-6 rounded-xl font-semibold transition-all ${
-                activeTab === 'news'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Health News
-            </button>
-          </div>
-        </div>
-
-        {/* Search Bar */}
-        <div className="bg-white rounded-2xl shadow-lg p-4 mb-6">
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={`Search ${activeTab === 'schemes' ? 'schemes' : 'news'}...`}
-              className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-
-        {/* Category Filter */}
-        {activeTab === 'schemes' ? (
-          <div className="bg-white rounded-2xl shadow-lg p-4 mb-6">
-            <div className="flex flex-wrap gap-2">
-              {categories.map((category) => {
-                const Icon = category.icon;
-                return (
-                  <button
-                    key={category.id}
-                    onClick={() => setSelectedCategory(category.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${
-                      selectedCategory === category.id
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {category.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl shadow-lg p-4 mb-6">
-            <div className="flex flex-wrap gap-2">
-              {newsCategories.map((category) => (
+    <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Search & Category Filter Navigation */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          
+          {/* Category Pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            {CATEGORIES.map(cat => {
+              const Icon = cat.icon;
+              const isSelected = activeCategory === cat.id;
+              return (
                 <button
-                  key={category.id}
-                  onClick={() => setSelectedNewsCategory(category.id)}
-                  className={`px-4 py-2 rounded-xl font-medium transition-all ${
-                    selectedNewsCategory === category.id
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  key={cat.id}
+                  onClick={() => {
+                    setActiveCategory(cat.id);
+                    setSearchQuery('');
+                  }}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                    isSelected
+                      ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                   }`}
                 >
-                  {category.name}
+                  <Icon className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-teal-600'}`} />
+                  <span>{cat.name}</span>
                 </button>
+              );
+            })}
+          </div>
+
+          {/* Right: Search Box & Refresh Button */}
+          <div className="flex items-center gap-2.5 w-full md:w-auto">
+            <div className="relative flex-1 md:w-72">
+              <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={activeCategory === 'schemes' ? 'Search schemes or benefits...' : 'Search health headlines...'}
+                className="w-full pl-9 pr-9 py-2 bg-white text-xs text-gray-900 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 font-medium placeholder-gray-400 shadow-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  title="Clear search"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                if (activeCategory === 'schemes') {
+                  toast.success('Schemes directory up to date');
+                } else {
+                  loadNews(activeCategory, true);
+                }
+              }}
+              disabled={loading || isRefreshing}
+              className="p-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 transition-all shadow-sm disabled:opacity-50 flex-shrink-0"
+              title="Refresh News Feed"
+            >
+              <ArrowPathIcon className={`w-4 h-4 text-teal-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+        </div>
+
+        {/* NEWS VIEW (when not in schemes) */}
+        {activeCategory !== 'schemes' && (
+          <div className="space-y-6">
+            
+            {/* Loading Skeleton */}
+            {loading ? (
+              <div className="space-y-6">
+                <div className="h-44 bg-white rounded-3xl border border-gray-200 animate-pulse p-6"></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3, 4, 5, 6].map(i => (
+                    <div key={i} className="h-64 bg-white rounded-2xl border border-gray-200 animate-pulse p-4 space-y-4">
+                      <div className="h-16 bg-slate-100 rounded-xl"></div>
+                      <div className="h-4 bg-slate-100 rounded w-3/4"></div>
+                      <div className="h-4 bg-slate-100 rounded w-1/2"></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : filteredArticles.length === 0 ? (
+              /* Empty State */
+              <div className="bg-white rounded-3xl border border-gray-200 p-12 text-center max-w-md mx-auto space-y-4">
+                <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
+                  <NewspaperIcon className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-gray-900">No articles found</h3>
+                <p className="text-xs text-gray-500">
+                  {searchQuery ? `No health news matched "${searchQuery}".` : 'No articles available in this category right now.'}
+                </p>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                  >
+                    Clear Search
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Featured Headline Hero Card */}
+                {topFeaturedArticle && (
+                  <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow group p-6 sm:p-8">
+                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                      
+                      {/* Left: Content */}
+                      <div className="flex-1 space-y-4">
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 font-medium">
+                          <span className="px-3 py-1 rounded-full bg-teal-600 text-white text-[11px] font-extrabold uppercase tracking-wider shadow-xs">
+                            Top Story
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-lg bg-teal-50 text-teal-800 font-bold border border-teal-100">
+                            {topFeaturedArticle.source}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <CalendarIcon className="w-3.5 h-3.5 text-gray-400" />
+                            {formatDate(topFeaturedArticle.publishedAt)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <ClockIcon className="w-3.5 h-3.5 text-gray-400" />
+                            {topFeaturedArticle.readTime}
+                          </span>
+                        </div>
+
+                        <h2 className="text-xl sm:text-2xl font-extrabold text-gray-900 group-hover:text-teal-600 transition-colors leading-snug">
+                          {topFeaturedArticle.title}
+                        </h2>
+
+                        <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">
+                          {topFeaturedArticle.description}
+                        </p>
+
+                        <div className="pt-2 flex items-center gap-3">
+                          <a
+                            href={topFeaturedArticle.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition-all shadow-sm hover:shadow"
+                          >
+                            <span>Read Full Article</span>
+                            <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+                          </a>
+
+                          <button
+                            onClick={() => handleCopyLink(topFeaturedArticle.url, topFeaturedArticle.title)}
+                            className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"
+                            title="Share Article Link"
+                          >
+                            <ShareIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right: HB Logo Badge */}
+                      <div className="flex-shrink-0 self-center md:self-start bg-gradient-to-br from-teal-50 via-emerald-50/50 to-white p-5 rounded-2xl border border-teal-100 flex flex-col items-center justify-center min-w-[140px] text-center shadow-xs">
+                        <img src="/app-logo.png" alt="HealthBridge" className="h-14 w-auto object-contain mb-2" />
+                        <span className="text-[11px] font-extrabold text-teal-900">HealthBridge</span>
+                        <span className="text-[10px] text-gray-500 font-medium">Live News</span>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
+                {/* News Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {remainingArticles.map((article, idx) => (
+                    <motion.div
+                      key={article.id || idx}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.04 }}
+                      className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col group"
+                    >
+                      {/* Card Header with HB Logo */}
+                      <div className="h-20 bg-gradient-to-r from-teal-50/70 via-emerald-50/40 to-slate-50 border-b border-gray-100 px-5 flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-10 w-10 rounded-xl bg-white border border-teal-100 shadow-xs flex items-center justify-center p-1.5 flex-shrink-0">
+                            <img src="/app-logo.png" alt="HealthBridge" className="h-full w-auto object-contain" />
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-extrabold text-teal-900 tracking-wide block">HealthBridge</span>
+                            <span className="text-[10px] text-gray-500 font-medium">Verified Update</span>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-lg bg-white text-gray-700 text-[11px] font-bold border border-gray-200 shadow-xs flex-shrink-0">
+                          {article.source}
+                        </span>
+                      </div>
+
+                      {/* Article Content */}
+                      <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3 text-[11px] text-gray-500 font-medium">
+                            <span className="flex items-center gap-1">
+                              <CalendarIcon className="w-3.5 h-3.5 text-gray-400" />
+                              {formatDate(article.publishedAt)}
+                            </span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <ClockIcon className="w-3.5 h-3.5 text-gray-400" />
+                              {article.readTime}
+                            </span>
+                          </div>
+
+                          <h3 className="text-sm font-bold text-gray-900 group-hover:text-teal-600 transition-colors line-clamp-2 leading-snug">
+                            {article.title}
+                          </h3>
+
+                          <p className="text-xs text-gray-600 line-clamp-3 leading-relaxed">
+                            {article.description}
+                          </p>
+                        </div>
+
+                        {/* Article Footer */}
+                        <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                          <a
+                            href={article.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-teal-600 hover:text-teal-800 font-bold text-xs transition-colors"
+                          >
+                            <span>Read Story</span>
+                            <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
+                          </a>
+
+                          <button
+                            onClick={() => handleCopyLink(article.url, article.title)}
+                            className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-all"
+                            title="Copy link"
+                          >
+                            <ShareIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </>
+            )}
+
+          </div>
+        )}
+
+        {/* GOVERNMENT SCHEMES VIEW */}
+        {activeCategory === 'schemes' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 rounded-3xl p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <span className="px-2.5 py-0.5 rounded-md bg-teal-600 text-white font-bold text-[11px] uppercase tracking-wide">
+                  Official Public Health Programs
+                </span>
+                <h2 className="text-xl font-extrabold text-teal-950">
+                  Government Health Schemes &amp; Welfare Initiatives
+                </h2>
+                <p className="text-xs text-teal-900 leading-relaxed max-w-2xl">
+                  Explore verified healthcare welfare policies, free health insurance coverage up to ₹5 Lakh, generic medicine centers, and maternal health incentives.
+                </p>
+              </div>
+              <div className="flex-shrink-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white text-teal-800 font-bold text-xs border border-teal-200 shadow-sm">
+                  <ShieldCheckIcon className="w-4 h-4 text-teal-600" />
+                  {filteredSchemes.length} Active Schemes
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredSchemes.map((scheme, idx) => (
+                <motion.div
+                  key={scheme.id}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between space-y-5"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2.5 py-0.5 rounded-lg bg-teal-50 text-teal-800 font-bold text-[11px] border border-teal-100">
+                        {scheme.category}
+                      </span>
+                      <a
+                        href={`tel:${scheme.helpline}`}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-500 hover:text-teal-700 bg-gray-50 hover:bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 transition-colors"
+                      >
+                        <PhoneIcon className="w-3 h-3 text-teal-600" />
+                        <span>Helpline: {scheme.helpline}</span>
+                      </a>
+                    </div>
+
+                    <h3 className="text-base font-extrabold text-gray-900 leading-snug">
+                      {scheme.title}
+                    </h3>
+
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      {scheme.description}
+                    </p>
+
+                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+                      <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">
+                        Eligibility
+                      </span>
+                      <p className="text-xs font-semibold text-gray-800">
+                        {scheme.eligibility}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">
+                        Key Coverage &amp; Benefits:
+                      </span>
+                      <ul className="space-y-1.5">
+                        {scheme.benefits.map((b, bIdx) => (
+                          <li key={bIdx} className="text-xs text-gray-700 flex items-start gap-2">
+                            <CheckIcon className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                            <span>{b}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
+                    <a
+                      href={scheme.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                    >
+                      <span>Official Portal</span>
+                      <ArrowTopRightOnSquareIcon className="w-3.5 h-3.5" />
+                    </a>
+
+                    <a
+                      href={`tel:${scheme.helpline}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-gray-600 hover:text-teal-700 transition-colors"
+                    >
+                      <PhoneIcon className="w-3.5 h-3.5 text-teal-600" />
+                      <span>Call {scheme.helpline}</span>
+                    </a>
+                  </div>
+                </motion.div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Content */}
-        {activeTab === 'schemes' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredSchemes.map((scheme, index) => {
-              const Icon = scheme.icon;
-              return (
-                <motion.div
-                  key={scheme.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow"
-                >
-                  <div className={`bg-gradient-to-r from-${scheme.color}-500 to-${scheme.color}-600 p-6`}>
-                    <div className="flex items-start gap-4">
-                      <div className="bg-white bg-opacity-20 p-3 rounded-xl">
-                        <Icon className="h-8 w-8 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-white mb-2">{scheme.title}</h3>
-                        <span className="inline-block px-3 py-1 bg-white bg-opacity-20 rounded-full text-white text-sm">
-                          {scheme.category}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-6">
-                    <p className="text-gray-600 mb-4">{scheme.description}</p>
-
-                    <div className="mb-4">
-                      <h4 className="font-semibold text-gray-800 mb-2">Eligibility:</h4>
-                      <p className="text-gray-600 text-sm">{scheme.eligibility}</p>
-                    </div>
-
-                    <div className="mb-4">
-                      <h4 className="font-semibold text-gray-800 mb-2">Key Benefits:</h4>
-                      <ul className="space-y-1">
-                        {scheme.benefits.map((benefit, idx) => (
-                          <li key={idx} className="text-gray-600 text-sm flex items-start gap-2">
-                            <span className="text-green-500 mt-1">✓</span>
-                            <span>{benefit}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="flex gap-3 pt-4 border-t border-gray-100">
-                      <a
-                        href={scheme.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 text-center px-4 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors"
-                      >
-                        Visit Website
-                      </a>
-                      <a
-                        href={`tel:${scheme.contactNumber}`}
-                        className="flex-1 text-center px-4 py-2 border border-indigo-600 text-indigo-600 rounded-xl font-medium hover:bg-indigo-50 transition-colors"
-                      >
-                        {scheme.contactNumber}
-                      </a>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        ) : (
-          <>
-            {loadingNews ? (
-              <div className="flex justify-center items-center py-20">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-              </div>
-            ) : (
-              <>
-                <AnimatePresence mode="wait">
-                  <motion.div 
-                    key={selectedNewsCategory}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                  >
-                    {filteredNews.map((article, index) => (
-                      <motion.div
-                        key={article.url || index}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all group"
-                      >
-                        {article.urlToImage && (
-                          <div className="relative h-48 overflow-hidden">
-                            <img
-                              src={article.urlToImage}
-                              alt={article.title}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              onError={(e) => {
-                                e.target.src = 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400&h=250&fit=crop';
-                              }}
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                          </div>
-                        )}
-                        <div className="p-5">
-                          <div className="flex items-center gap-3 mb-3">
-                            <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-semibold flex items-center gap-1">
-                              <NewspaperIcon className="w-3 h-3" />
-                              {article.source?.name || 'News'}
-                            </span>
-                            <span className="text-gray-500 text-xs flex items-center gap-1">
-                              <CalendarIcon className="w-3 h-3" />
-                              {formatDate(article.publishedAt)}
-                            </span>
-                          </div>
-                          <h3 className="text-lg font-bold text-gray-800 mb-2 line-clamp-2 group-hover:text-indigo-600 transition-colors">
-                            {article.title}
-                          </h3>
-                          <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                            {article.description || 'No description available.'}
-                          </p>
-                          <a
-                            href={article.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 text-indigo-600 font-semibold hover:text-indigo-700 transition-colors"
-                          >
-                            Read Full Article
-                            <ArrowTopRightOnSquareIcon className="w-4 h-4" />
-                          </a>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                </AnimatePresence>
-
-                {/* Pagination */}
-                {filteredNews.length > 0 && (
-                  <div className="flex justify-center gap-3 mt-8">
-                    <button
-                      onClick={() => setNewsPage(p => Math.max(1, p - 1))}
-                      disabled={newsPage === 1}
-                      className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Previous
-                    </button>
-                    <span className="px-6 py-2 bg-indigo-100 text-indigo-700 rounded-xl font-semibold">
-                      Page {newsPage}
-                    </span>
-                    <button
-                      onClick={() => setNewsPage(p => p + 1)}
-                      className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
-
-        {/* No Results */}
-        {activeTab === 'schemes' && filteredSchemes.length === 0 && (
-          <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-            <p className="text-gray-500">No schemes found matching your search.</p>
-          </div>
-        )}
-
-        {activeTab === 'news' && filteredNews.length === 0 && (
-          <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
-            <p className="text-gray-500">No news found matching your search.</p>
-          </div>
-        )}
-      </motion.div>
+      </div>
     </div>
   );
 };

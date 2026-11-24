@@ -312,13 +312,13 @@ const PatientAppointments = () => {
                     )}
                     
                     {/* Video Call Button */}
-                    {appointment.status === 'confirmed' && appointment.appointmentType === 'video' && (
+                    {(appointment.appointmentType === 'video' || appointment.type === 'video' || appointment.type === 'video_call' || (typeof appointment.appointmentNumber === 'string' && appointment.appointmentNumber.startsWith('VC'))) && appointment.status !== 'cancelled' && appointment.status !== 'rejected' && appointment.status !== 'completed' && (
                       <Link
                         to={`/video-call/${appointment.id}`}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 sm:gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg text-xs sm:text-sm transition-colors shadow-sm"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 sm:gap-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg text-xs sm:text-sm transition-colors shadow-sm"
                       >
                         <VideoCameraIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        <span>Join Call</span>
+                        <span>Join Video Call</span>
                       </Link>
                     )}
                     

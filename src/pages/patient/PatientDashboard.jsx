@@ -292,7 +292,7 @@ const PatientDashboard = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Welcome, {userProfile?.name || user?.displayName || 'Patient'}! 👋
+                Welcome, {userProfile?.name || user?.displayName || 'Patient'}!
               </h1>
               <p className="text-gray-600">
                 Today: {new Date().toLocaleDateString('en-US', { 
@@ -447,7 +447,7 @@ const PatientDashboard = () => {
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1.5">
                                 <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs font-semibold ${typeClasses}`}>
                                   {appointmentType === 'video' ? (
                                     <>
@@ -464,6 +464,15 @@ const PatientDashboard = () => {
                                 <span className={`inline-flex items-center gap-0.5 text-xs ${getStatusBadge(item.status)}`}>
                                   {statusLabel}
                                 </span>
+                                {appointmentType === 'video' && item.status !== 'cancelled' && item.status !== 'rejected' && (
+                                  <Link
+                                    to={`/video-call/${item.id}`}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded text-[11px] font-bold shadow-sm transition-all"
+                                  >
+                                    <VideoCameraIcon className="w-3 h-3" />
+                                    <span>Join</span>
+                                  </Link>
+                                )}
                               </div>
                             </div>
                           );
@@ -514,10 +523,21 @@ const PatientDashboard = () => {
                         {appointment.appointmentTime}
                       </span>
                     </div>
-                    {appointment.appointmentType === 'video' && (
-                      <div className="mt-3 flex items-center text-sm text-green-600">
-                        <VideoCameraIcon className="w-4 h-4 mr-1" />
-                        Video Consultation
+                    {(appointment.appointmentType === 'video' || appointment.type === 'video' || appointment.type === 'video_call' || (typeof appointment.appointmentNumber === 'string' && appointment.appointmentNumber.startsWith('VC'))) && (
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="flex items-center text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded-md border border-teal-200">
+                          <VideoCameraIcon className="w-3.5 h-3.5 mr-1 text-teal-600" />
+                          Video Consultation
+                        </div>
+                        {appointment.status !== 'cancelled' && appointment.status !== 'rejected' && (
+                          <Link
+                            to={`/video-call/${appointment.id}`}
+                            className="inline-flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm hover:shadow transition-all"
+                          >
+                            <VideoCameraIcon className="w-3.5 h-3.5" />
+                            <span>Join Video Call</span>
+                          </Link>
+                        )}
                       </div>
                     )}
                   </div>

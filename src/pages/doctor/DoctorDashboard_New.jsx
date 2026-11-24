@@ -96,13 +96,6 @@ const DoctorDashboard = () => {
       icon: DocumentTextIcon,
       href: '/doctor/patients',
       color: 'bg-gradient-to-r from-green-500 to-green-600',
-    },
-    {
-      name: 'Video Consultations',
-      description: 'Start or join video calls',
-      icon: VideoCameraIcon,
-      href: '/video-call',
-      color: 'bg-gradient-to-r from-purple-500 to-purple-600',
     }
   ];
 

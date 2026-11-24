@@ -1,5 +1,6 @@
 // Appointment Request Management Component for Doctor Dashboard
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { appointmentServices } from '../services/firebaseServices';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,7 +52,7 @@ const AppointmentRequests = ({ onAppointmentUpdate, doctorId }) => {
       setProcessingId(appointmentId);
       const docId = doctorId || user?.uid;
       const result = await appointmentServices.approveAppointment(appointmentId, docId);
-      toast.success('✅ Appointment approved! Patient has been notified.');
+      toast.success('Appointment approved! Patient has been notified.');
       
       // Remove from pending list
       setPendingRequests(prev => prev.filter(req => req.id !== appointmentId));
@@ -73,7 +74,7 @@ const AppointmentRequests = ({ onAppointmentUpdate, doctorId }) => {
       setProcessingId(appointmentId);
       const docId = doctorId || user?.uid;
       const result = await appointmentServices.rejectAppointment(appointmentId, docId, reason);
-      toast.success('❌ Appointment rejected. Patient has been notified.');
+      toast.success('Appointment rejected. Patient has been notified.');
       
       // Remove from pending list
       setPendingRequests(prev => prev.filter(req => req.id !== appointmentId));
@@ -227,7 +228,17 @@ const AppointmentRequests = ({ onAppointmentUpdate, doctorId }) => {
                   )}
                 </div>
 
-                <div className="flex gap-2 ml-4">
+                <div className="flex items-center gap-2 ml-4">
+                  {(request.type === 'video' || request.appointmentType === 'video' || (typeof request.appointmentNumber === 'string' && request.appointmentNumber.startsWith('VC'))) && (
+                    <Link
+                      to={`/video-call/${request.id}`}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all whitespace-nowrap"
+                      title="Join Video Consultation Room"
+                    >
+                      <VideoCameraIcon className="h-4 w-4" />
+                      <span>Join Call</span>
+                    </Link>
+                  )}
                   <button
                     onClick={() => handleApprove(request.id)}
                     disabled={processingId === request.id}

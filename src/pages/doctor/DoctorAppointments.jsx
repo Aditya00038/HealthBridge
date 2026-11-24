@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   CalendarDaysIcon,
   VideoCameraIcon,
@@ -36,6 +37,17 @@ function getInitials(name) {
   const parts = name.split(' ');
   return parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0][0];
 }
+
+const isVideoAppointment = (apt) => {
+  if (!apt) return false;
+  const type = (apt.type || apt.appointmentType || '').toLowerCase();
+  return (
+    type === 'video' ||
+    type === 'video_call' ||
+    type === 'online' ||
+    (typeof apt.appointmentNumber === 'string' && apt.appointmentNumber.startsWith('VC'))
+  );
+};
 
 const DoctorAppointments = () => {
   const { user } = useAuth();
@@ -89,7 +101,7 @@ const DoctorAppointments = () => {
       
       await addDoc(collection(db, 'patientRecords'), recordData);
       
-      toast.success('✅ Appointment completed! Patient record created.');
+      toast.success('Appointment completed! Patient record created.');
       
       // Refresh appointments
       fetchAppointments();
@@ -220,14 +232,25 @@ const DoctorAppointments = () => {
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleMarkAsDone(apt)}
-                    disabled={processingId === apt.id}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <CheckCircleIcon className="w-4 h-4" />
-                    {processingId === apt.id ? 'Processing...' : 'Complete'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {isVideoAppointment(apt) && apt.status !== 'completed' && apt.status !== 'cancelled' && (
+                      <Link
+                        to={`/video-call/${apt.id}`}
+                        className="px-3.5 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-sm font-semibold rounded-lg flex items-center gap-1.5 shadow-sm hover:shadow transition-all whitespace-nowrap"
+                      >
+                        <VideoCameraIcon className="w-4 h-4" />
+                        <span>Join Call</span>
+                      </Link>
+                    )}
+                    <button
+                      onClick={() => handleMarkAsDone(apt)}
+                      disabled={processingId === apt.id}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <CheckCircleIcon className="w-4 h-4" />
+                      {processingId === apt.id ? 'Processing...' : 'Complete'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -318,6 +341,15 @@ const DoctorAppointments = () => {
                 )}
                 
                 <div className="flex flex-wrap gap-2 pt-2 border-t">
+                  {isVideoAppointment(nextPatient) && nextPatient.status !== 'completed' && nextPatient.status !== 'cancelled' && (
+                    <Link
+                      to={`/video-call/${nextPatient.id}`}
+                      className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center gap-2 shadow-sm transition-all"
+                    >
+                      <VideoCameraIcon className="w-4 h-4" />
+                      <span>Join Video Call</span>
+                    </Link>
+                  )}
                   {(nextPatient.patientPhone || nextPatient.phone) ? (
                     <a 
                       href={`tel:${nextPatient.patientPhone || nextPatient.phone}`}
@@ -381,7 +413,7 @@ const DoctorAppointments = () => {
                       <div className="text-sm text-gray-500 truncate">{apt.reasonForVisit || apt.reason || 'General consultation'}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 flex-shrink-0 ml-4">
+                  <div className="flex items-center gap-3 flex-shrink-0 ml-4">
                     <div className="text-right">
                       <div className="text-sm font-bold text-gray-900">
                         {new Date(apt.appointmentDate?.seconds ? apt.appointmentDate.seconds * 1000 : apt.appointmentDate).toLocaleDateString('en-US', { 
@@ -392,6 +424,12 @@ const DoctorAppointments = () => {
                       </div>
                       <div className="text-xs text-gray-500">{apt.appointmentTime || apt.time || apt.selectedTime}</div>
                     </div>
+                    {isVideoAppointment(apt) && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1">
+                        <VideoCameraIcon className="w-3 h-3 text-teal-600" />
+                        Video
+                      </span>
+                    )}
                     <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                       apt.status === 'confirmed' || apt.status === 'approved' ? 'bg-green-100 text-green-700' :
                       apt.status === 'completed' ? 'bg-blue-100 text-blue-700' :
@@ -400,6 +438,15 @@ const DoctorAppointments = () => {
                     }`}>
                       {apt.status || 'pending'}
                     </span>
+                    {isVideoAppointment(apt) && apt.status !== 'completed' && apt.status !== 'cancelled' && (
+                      <Link
+                        to={`/video-call/${apt.id}`}
+                        className="px-3 py-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-all whitespace-nowrap"
+                      >
+                        <VideoCameraIcon className="w-3.5 h-3.5" />
+                        <span>Join Call</span>
+                      </Link>
+                    )}
                   </div>
                 </div>
               ))
